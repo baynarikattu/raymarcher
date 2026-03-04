@@ -3,6 +3,7 @@
 set -xe
 
 CC="${CC:-cc}"
-CFLAGS="-g -O3 -std=c99 -Wall -Wextra -pedantic -pedantic-errors -Werror"
+COPT="-O2 -ffast-math"
+CFLAGS="-g -std=c99 -Wall -Wextra -pedantic -pedantic-errors -Werror"
 
-$CC $CFLAGS -o raymarcher raymarcher.c -lm
+$CC $COPT $CFLAGS -o raymarcher raymarcher.c -lm

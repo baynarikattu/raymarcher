@@ -68,7 +68,7 @@
 
 #define MAX_ITER 800
 #define MAX_DIST 100
-#define MIN_DIST 0.01
+#define MIN_DIST 0.001
 #define EPSILON 0.001
 #define SAMPLES_PER_RAY 16
 #define MAX_REFLECTION 3
