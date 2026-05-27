@@ -257,7 +257,7 @@ cvec3 cvec3_from_cvec4(cvec4 color) {
     };
 }
 
-cvec3 cvec3_from_int(int color) {
+cvec3 cvec3_from_int(uint32_t color) {
     return (cvec3) {
         .r = (color >> 0)  & 0xFF,
         .g = (color >> 8)  & 0xFF,
@@ -265,7 +265,7 @@ cvec3 cvec3_from_int(int color) {
     };
 }
 
-cvec4 cvec4_from_int(int color) {
+cvec4 cvec4_from_int(uint32_t color) {
     return (cvec4) {
         .r = (color >> 0)  & 0xFF,
         .g = (color >> 8)  & 0xFF,
@@ -571,6 +571,8 @@ void write_ppm(const char *filename, int width, int height, uint8_t *data) {
     ASSERT(filename && data);
 
     FILE *f = fopen(filename, "wb");
+    ASSERT(f);
+
     fprintf(f, "P6 %d %d 255\n", width, height);
     fwrite(data, CHANNELS, width*height, f);
     fclose(f);
