@@ -1,2 +1,8 @@
-raymarcher
-output.ppm
+*
+!*.*
+!*/
+.*
+
+*.ppm
+*.png
+compile_commands.json

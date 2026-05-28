@@ -53,7 +53,6 @@
 */
 
 #include <assert.h>
-#include <limits.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -64,16 +63,15 @@
 #define WIDTH 800
 #define HEIGHT 600
 #define ASPECT ((float)WIDTH / HEIGHT)
-#define CHANNELS 3
 
 #define MAX_ITER 800
 #define MAX_DIST 100
 #define MIN_DIST 0.001
 #define EPSILON 0.001
-#define SAMPLES_PER_RAY 16
-#define MAX_REFLECTION 3
+#define SAMPLES_PER_RAY 8
+#define MAX_REFLECTION 2
 
-#define THREAD_COUNT 2
+#define THREAD_COUNT 4
 
 
 #define ASSERT(...) assert(__VA_ARGS__)
@@ -85,6 +83,8 @@
 #endif
 
 #define UNREACHABLE(...) assert(!"unreachable")
+
+#define ARRAY_LEN(arr) (sizeof((arr))/sizeof((arr)[0]))
 
 /* Vectors */
 
@@ -232,30 +232,18 @@ vec3 vec3_norm(vec3 v) {
 
 /* Colors */
 
-const vec3 RED     = { 1.0, 0.0, 0.0 };
-const vec3 GREEN   = { 0.0, 1.0, 0.0 };
-const vec3 BLUE    = { 0.0, 0.0, 1.0 };
-const vec3 YELLOW  = { 1.0, 1.0, 0.0 };
-const vec3 MAGENTA = { 1.0, 0.0, 1.0 };
-const vec3 CYAN    = { 0.0, 1.0, 1.0 };
-const vec3 WHITE   = { 1.0, 1.0, 1.0 };
-const vec3 BLACK   = { 0.0, 0.0, 0.0 };
-
 typedef struct {
-    char r, g, b;
+    uint8_t r, g, b;
 } cvec3;
 
-typedef struct {
-    char r, g, b, a;
-} cvec4;
-
-cvec3 cvec3_from_cvec4(cvec4 color) {
-    return (cvec3) {
-        .r = color.r,
-        .g = color.g,
-        .b = color.b,
-    };
-}
+const cvec3 RED     = { 1, 0, 0 };
+const cvec3 GREEN   = { 0, 1, 0 };
+const cvec3 BLUE    = { 0, 0, 1 };
+const cvec3 YELLOW  = { 1, 1, 0 };
+const cvec3 MAGENTA = { 1, 0, 1 };
+const cvec3 CYAN    = { 0, 1, 1 };
+const cvec3 WHITE   = { 1, 1, 1 };
+const cvec3 BLACK   = { 0, 0, 0 };
 
 cvec3 cvec3_from_int(uint32_t color) {
     return (cvec3) {
@@ -265,77 +253,68 @@ cvec3 cvec3_from_int(uint32_t color) {
     };
 }
 
-cvec4 cvec4_from_int(uint32_t color) {
-    return (cvec4) {
-        .r = (color >> 0)  & 0xFF,
-        .g = (color >> 8)  & 0xFF,
-        .b = (color >> 16) & 0xFF,
-        .a = (color >> 24) & 0xFF,
-    };
-}
-
 /* Framebuffer */
 
-static uint8_t fb[WIDTH * HEIGHT * CHANNELS];
+static cvec3 fb[WIDTH * HEIGHT];
 
-#if CHANNELS == 3
-void fb_plot(uint8_t *fb, int x, int y, cvec3 color) {
+void fb_plot(cvec3 *fb, int x, int y, cvec3 color) {
     ASSERT(fb);
 
-    fb[(x + y * WIDTH) * 3 + 0] = color.r;
-    fb[(x + y * WIDTH) * 3 + 1] = color.g;
-    fb[(x + y * WIDTH) * 3 + 2] = color.b;
+    fb[x + y * WIDTH] = color;
 }
 
-void fb_fill(uint8_t *fb, cvec3 color) {
+void fb_fill(cvec3 *fb, cvec3 color) {
     ASSERT(fb);
 
     for (int i = 0; i < WIDTH * HEIGHT; i++) {
-        fb[i * CHANNELS + 0] = color.r;
-        fb[i * CHANNELS + 1] = color.g;
-        fb[i * CHANNELS + 2] = color.b;
+        fb[i] = color;
     }
 }
-#elif CHANNELS == 4
-void fb_plot(uint8_t *fb, int x, int y, cvec4 color) {
-    ASSERT(fb);
 
-    fb[(x + y * WIDTH) * 3 + 0] = color.r;
-    fb[(x + y * WIDTH) * 3 + 1] = color.g;
-    fb[(x + y * WIDTH) * 3 + 2] = color.b;
-    fb[(x + y * WIDTH) * 3 + 3] = color.a;
-}
-
-void fb_fill(uint8_t *fb, cvec4 color) {
-    ASSERT(fb);
-
-    for (int i = 0; i < WIDTH * HEIGHT; i++) {
-        fb[i * CHANNELS + 0] = color.r;
-        fb[i * CHANNELS + 1] = color.g;
-        fb[i * CHANNELS + 2] = color.b;
-        fb[i * CHANNELS + 3] = color.a;
-    }
-}
-#else
-STATIC_ASSERT(0, "5th dimension, huh")
-#endif
-
-/* Ray Marching */
-
-const vec2 iResolution = { WIDTH, HEIGHT };
+/* General Graphics */
 
 float clamp(float x, float min, float max) {
     return fmaxf(fminf(x, max), min);
 }
 
-cvec4 vec4_to_cvec4(vec4 v) {
-    return (cvec4) {
-        .r = clamp(v.x * 255, 0, 255),
-        .g = clamp(v.y * 255, 0, 255),
-        .b = clamp(v.z * 255, 0, 255),
-        .a = clamp(v.w * 255, 0, 255),
+vec3 mix(vec3 a, vec3 b, float t) {
+    return (vec3) {
+        .x = a.x * (1.0 - t) + b.x * t,
+        .y = a.y * (1.0 - t) + b.y * t,
+        .z = a.z * (1.0 - t) + b.z * t,
     };
 }
+
+vec3 reflect(vec3 i, vec3 n) {
+    return vec3_sub(i, vec3_mulf(n, 2.0 * vec3_dot(n, i)));
+}
+
+/* TODO:
+    - `rand()` -> `pseudoRand()`
+    - optimize `randomOnSphere()`
+*/
+vec3 randomOnSphere(void) {
+    vec3 v;
+    while (1) {
+        v.x = (float)rand() / (float)RAND_MAX * 2.0 - 1.0;
+        v.y = (float)rand() / (float)RAND_MAX * 2.0 - 1.0;
+        v.z = (float)rand() / (float)RAND_MAX * 2.0 - 1.0;
+        if (vec3_length(v) <= 1.0) break;
+    }
+    return vec3_norm(v);
+}
+
+vec3 randomOnHemisphere(vec3 n) {
+    ASSERT(fabs(vec3_length(n)) - 1.0 < EPSILON);
+
+    vec3 p = randomOnSphere();
+    if (vec3_dot(p, n) < 0.0) p = vec3_neg(p);
+    return p;
+}
+
+/* Ray Marching */
+
+const vec2 iResolution = { WIDTH, HEIGHT };
 
 cvec3 vec4_to_cvec3(vec4 v) {
     return (cvec3) {
@@ -362,17 +341,6 @@ typedef struct {
     vec3 color;
 } Fetch;
 
-/* TODO: move somewhere else */
-size_t array_findMin(float *arr, size_t nmemb) {
-    ASSERT(arr && nmemb != 0);
-
-    size_t index = 0;
-    for (size_t i = 0; i < nmemb; i++) {
-        if (arr[i] < arr[index]) index = i;
-    }
-    return index;
-}
-
 Fetch map(vec3 p) {
     STATIC_ASSERT(MATERIAL_COUNT == 2, "update this")
 
@@ -391,7 +359,11 @@ Fetch map(vec3 p) {
         {0.0, 1.0, 1.0},
         {0.41, 0.41, 0.41},
     };
-    size_t index = array_findMin(dists, 3);
+    /* Find the index of min. */
+    size_t index = 0;
+    for (size_t i = 0; i < ARRAY_LEN(dists); i++) {
+        if (dists[i] < dists[index]) index = i;
+    }
 
     return (Fetch) {
         .dist = dists[index],
@@ -450,40 +422,6 @@ vec3 getNormal(vec3 p) {
         .y = map(vec3_add(p, dy)).dist - map(vec3_sub(p, dy)).dist,
         .z = map(vec3_add(p, dz)).dist - map(vec3_sub(p, dz)).dist,
     });
-}
-
-vec3 reflect(vec3 i, vec3 n) {
-    return vec3_sub(i, vec3_mulf(n, 2.0 * vec3_dot(n, i)));
-}
-
-vec3 mix(vec3 a, vec3 b, float t) {
-    return (vec3) {
-        .x = a.x * (1.0 - t) + b.x * t,
-        .y = a.y * (1.0 - t) + b.y * t,
-        .z = a.z * (1.0 - t) + b.z * t,
-    };
-}
-
-/* TODO:
-    - `rand()` -> `myRand()`
-    - optimize `randomOnSphere()`
-*/
-vec3 randomOnSphere(void) {
-    vec3 v;
-    while (1) {
-        v.x = (float)rand() / (float)RAND_MAX * 2.0 - 1.0;
-        v.y = (float)rand() / (float)RAND_MAX * 2.0 - 1.0;
-        v.z = (float)rand() / (float)RAND_MAX * 2.0 - 1.0;
-        if (vec3_length(v) <= 1.0) break;
-    }
-    return vec3_norm(v);
-}
-
-vec3 randomOnHemisphere(vec3 n) {
-    ASSERT(vec3_length(n) - 1.0 < EPSILON);
-
-    vec3 p = randomOnSphere();
-    return vec3_norm(vec3_mulf(p, vec3_dot(p, n)));
 }
 
 vec3 getSkyColor(vec3 rd) {
@@ -551,7 +489,7 @@ int worker(void *arg) {
 
     /* Each thread has it's own memory subbuffer
        which doesn't overlap with others, so no race occurs. */
-    uint8_t *tfb = &fb[ctx.id * height * WIDTH * CHANNELS];
+    cvec3 *tfb = &fb[ctx.id * height * WIDTH];
 
     for (int j = 0; j < height; j++) {
         for (int i = 0; i < WIDTH; i++) {
@@ -567,23 +505,9 @@ int worker(void *arg) {
     return 0;
 }
 
-void write_ppm(const char *filename, int width, int height, uint8_t *data) {
-    ASSERT(filename && data);
-
-    FILE *f = fopen(filename, "wb");
-    ASSERT(f);
-
-    fprintf(f, "P6 %d %d 255\n", width, height);
-    fwrite(data, CHANNELS, width*height, f);
-    fclose(f);
-}
-
-int main(void) {
+void run_workers(void) {
     thrd_t threads[THREAD_COUNT];
     ThreadContext ctxs[THREAD_COUNT];
-
-    /* Fill fb with MAGENTA so multithreading buffer splitting errors become obvious. */
-    fb_fill(fb, cvec3_from_int(0xFFFF00FF));
 
     /* Run workers */
     for (int i = 0; i < THREAD_COUNT; i++) {
@@ -596,7 +520,30 @@ int main(void) {
     for (int i = 0; i < THREAD_COUNT; i++) {
         thrd_join(threads[i], NULL);
     }
+}
 
+/* PPM (Portable Pixmap) */
+
+void write_ppm(const char *filename, int width, int height, cvec3 *data) {
+    ASSERT(filename && data);
+
+    FILE *f = fopen(filename, "wb");
+    ASSERT(f);
+
+    fprintf(f, "P6 %d %d 255\n", width, height);
+    fwrite(data, sizeof(cvec3), width*height, f);
+    fclose(f);
+}
+
+int main(void) {
+    /* Fill fb with MAGENTA so multithreading buffer splitting errors become obvious. */
+    fb_fill(fb, MAGENTA);
+
+    /* Run rendering on multiple cores */
+    run_workers();
+
+    /* Write the image to a file */
     write_ppm("output.ppm", WIDTH, HEIGHT, fb);
+
     return 0;
 }
