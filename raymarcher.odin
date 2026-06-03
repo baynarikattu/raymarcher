@@ -293,22 +293,18 @@ shader :: proc(fragCoord: Vector2) -> Vector4 {
 }
 
 ThreadContext :: struct {
-	id: int,
+	id:     int,
+	fb:     []Color,
+	height: int,
+	pad:    i8, // BUG: if this is commented out, the program will crash at runtime.
 }
 
 worker :: proc(data: rawptr) {
 	ctx := transmute(^ThreadContext)data
-	thread_count := min(os.get_processor_core_count(), HEIGHT)
 
-	height := HEIGHT / thread_count
-
-	start := ctx.id * height * WIDTH
-	end := (ctx.id + 1) * height * WIDTH
-	tfb: []Color = fb[start:end] if ctx.id != thread_count - 1 else fb[start:]
-
-	for j in 0 ..< len(tfb) / WIDTH {
+	for j in 0 ..< len(ctx.fb) / WIDTH {
 		for i in 0 ..< WIDTH {
-			fragCoord := Vector2{f64(i), f64(HEIGHT - (j + ctx.id * height))}
+			fragCoord := Vector2{f64(i), f64(HEIGHT - (j + ctx.id * ctx.height))}
 
 			shaderOut := shader(fragCoord)
 			color := Color {
@@ -317,21 +313,31 @@ worker :: proc(data: rawptr) {
 				u8(math.clamp(shaderOut.z * 255, 0, 255)),
 			}
 
-			fb_plot(tfb, i, j, color)
+			fb_plot(ctx.fb, i, j, color)
 		}
 	}
 }
 
 run_workers :: proc(worker: proc(_: rawptr)) {
-	thread_count := os.get_processor_core_count()
+	thread_count := min(os.get_processor_core_count(), HEIGHT)
 	fmt.println("DETECTED CPU CORES:", thread_count)
 
 	threads := [dynamic]^thread.Thread{}
 	ctxs := [dynamic]ThreadContext{}
+	height := HEIGHT / thread_count
 
 	/* Run workers */
 	for i in 0 ..< thread_count {
-		append(&ctxs, ThreadContext{i})
+		start := i * height * WIDTH
+		end := (i + 1) * height * WIDTH
+
+		ctx := ThreadContext {
+			id     = i,
+			height = height,
+			fb     = fb[start:end] if i != thread_count - 1 else fb[start:],
+		}
+
+		append(&ctxs, ctx)
 		append(&threads, thread.create_and_start_with_data(&ctxs[i], worker, priority = .High))
 	}
 
