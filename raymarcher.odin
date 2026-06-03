@@ -325,10 +325,14 @@ run_workers :: proc(worker: proc(_: rawptr)) {
 	fmt.println("DETECTED CPU CORES:", thread_count)
 
 	threads := [dynamic]^thread.Thread{}
-	ctxs := [dynamic]ThreadContext{}
+	defer delete(threads)
+
+	ctxs := make([dynamic]ThreadContext, 0, thread_count)
+	defer delete(ctxs)
+
 	height := HEIGHT / thread_count
 
-	/* Run workers */
+	// Run threads
 	for i in 0 ..< thread_count {
 		start := i * height * WIDTH
 		end := (i + 1) * height * WIDTH
@@ -344,6 +348,11 @@ run_workers :: proc(worker: proc(_: rawptr)) {
 	}
 
 	thread.join_multiple(..threads[:])
+
+	// Destroy threads
+	for t in threads {
+		thread.destroy(t)
+	}
 }
 
 // PPM (Portable Pixmap)
