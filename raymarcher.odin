@@ -94,16 +94,16 @@ Vector3_norm :: proc(v: Vector3) -> Vector3 {
 
 // Colors
 
-RED :: Color{1, 0, 0}
-GREEN :: Color{0, 1, 0}
-BLUE :: Color{0, 0, 1}
-YELLOW :: Color{1, 1, 0}
-MAGENTA :: Color{1, 0, 1}
-CYAN :: Color{0, 1, 1}
-WHITE :: Color{1, 1, 1}
-BLACK :: Color{0, 0, 0}
-
 Color :: distinct [3]u8
+
+RED :: Color{255, 0, 0}
+GREEN :: Color{0, 255, 0}
+BLUE :: Color{0, 0, 255}
+YELLOW :: Color{255, 255, 0}
+MAGENTA :: Color{255, 0, 255}
+CYAN :: Color{0, 255, 255}
+WHITE :: Color{255, 255, 255}
+BLACK :: Color{0, 0, 0}
 
 // Framebuffer
 
@@ -116,8 +116,8 @@ fb_plot :: proc(fb: []Color, x: int, y: int, color: Color) {
 fb_fill :: proc(fb: []Color, color: Color) {
 	assert(len(fb) == WIDTH * HEIGHT)
 
-	for _, idx in fb {
-		fb[idx] = color
+	for &c in fb {
+		c = color
 	}
 }
 
