@@ -298,17 +298,15 @@ ThreadContext :: struct {
 
 worker :: proc(data: rawptr) {
 	ctx := transmute(^ThreadContext)data
-	thread_count := os.get_processor_core_count()
+	thread_count := min(os.get_processor_core_count(), HEIGHT)
 
-	/* TODO: HEIGHT should not depend on divisibility by thread_count */
-	assert(HEIGHT % thread_count == 0, "HEIGHT should be divisible by thread_count")
 	height := HEIGHT / thread_count
 
 	start := ctx.id * height * WIDTH
 	end := (ctx.id + 1) * height * WIDTH
-	tfb: []Color = fb[start:end]
+	tfb: []Color = fb[start:end] if ctx.id != thread_count - 1 else fb[start:]
 
-	for j in 0 ..< height {
+	for j in 0 ..< len(tfb) / WIDTH {
 		for i in 0 ..< WIDTH {
 			fragCoord := Vector2{f64(i), f64(HEIGHT - (j + ctx.id * height))}
 
@@ -363,4 +361,3 @@ main :: proc() {
 	// Write the image to a file
 	write_ppm("output.ppm", WIDTH, HEIGHT, slice.to_bytes(fb[:]))
 }
-
