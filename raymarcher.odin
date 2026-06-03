@@ -292,6 +292,8 @@ shader :: proc(fragCoord: Vector2) -> Vector4 {
 	return Vector4{col.x, col.y, col.z, 1.0}
 }
 
+// Multithreading
+
 ThreadContext :: struct {
 	id:     int,
 	fb:     []Color,
