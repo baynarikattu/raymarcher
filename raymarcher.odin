@@ -298,7 +298,6 @@ ThreadContext :: struct {
 	id:     int,
 	fb:     []Color,
 	height: int,
-	pad:    i8, // BUG: if this is commented out, the program will crash at runtime.
 }
 
 worker :: proc(data: rawptr) {
@@ -378,3 +377,4 @@ main :: proc() {
 	// Write the image to a file
 	write_ppm("output.ppm", WIDTH, HEIGHT, slice.to_bytes(fb[:]))
 }
+
