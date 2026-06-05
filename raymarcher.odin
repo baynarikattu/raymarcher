@@ -295,17 +295,17 @@ shader :: proc(fragCoord: Vector2) -> Vector4 {
 // Multithreading
 
 ThreadContext :: struct {
-	id:     int,
-	fb:     []Color,
-	height: int,
+	id:          int,
+	num_threads: int,
 }
 
 worker :: proc(data: rawptr) {
-	ctx := transmute(^ThreadContext)data
+	ctx := cast(^ThreadContext)data
+	height := HEIGHT / ctx.num_threads
 
-	for j in 0 ..< len(ctx.fb) / WIDTH {
+	for j := ctx.id; j < HEIGHT; j += ctx.num_threads {
 		for i in 0 ..< WIDTH {
-			fragCoord := Vector2{f64(i), f64(HEIGHT - (j + ctx.id * ctx.height))}
+			fragCoord := Vector2{f64(i), f64(HEIGHT - j)}
 
 			shaderOut := shader(fragCoord)
 			color := Color {
@@ -314,32 +314,26 @@ worker :: proc(data: rawptr) {
 				u8(math.clamp(shaderOut.z * 255, 0, 255)),
 			}
 
-			fb_plot(ctx.fb, i, j, color)
+			fb_plot(fb[:], i, j, color)
 		}
 	}
 }
 
 run_workers :: proc(worker: proc(_: rawptr)) {
-	thread_count := min(os.get_processor_core_count(), HEIGHT)
-	fmt.println("DETECTED CPU CORES:", thread_count)
+	num_cores := min(os.get_processor_core_count(), HEIGHT)
+	fmt.println("The renderer is using", num_cores, "cores")
 
-	threads := [dynamic]^thread.Thread{}
+	threads := make([dynamic]^thread.Thread, 0, num_cores)
 	defer delete(threads)
 
-	ctxs := make([dynamic]ThreadContext, 0, thread_count)
+	ctxs := make([dynamic]ThreadContext, 0, num_cores)
 	defer delete(ctxs)
 
-	height := HEIGHT / thread_count
-
 	// Run threads
-	for i in 0 ..< thread_count {
-		start := i * height * WIDTH
-		end := (i + 1) * height * WIDTH
-
+	for i in 0 ..< num_cores {
 		ctx := ThreadContext {
-			id     = i,
-			height = height,
-			fb     = fb[start:end] if i != thread_count - 1 else fb[start:],
+			id          = i,
+			num_threads = num_cores,
 		}
 
 		append(&ctxs, ctx)
