@@ -32,6 +32,7 @@ package raymarcher
 
 import "core:fmt"
 import "core:math"
+import "core:math/linalg"
 import "core:math/rand"
 import "core:os"
 import "core:slice"
@@ -52,45 +53,6 @@ MAX_REFLECTION :: 2
 Vector2 :: distinct [2]f64
 Vector3 :: distinct [3]f64
 Vector4 :: distinct [4]f64
-
-dot :: proc {
-	Vector2_dot,
-	Vector3_dot,
-}
-
-Vector2_dot :: proc(a: Vector2, b: Vector2) -> f64 {
-	return a.x * b.x + a.y
-}
-
-Vector3_dot :: proc(a: Vector3, b: Vector3) -> f64 {
-	return a.x * b.x + a.y * b.y + a.z * b.z
-}
-
-length :: proc {
-	Vector2_length,
-	Vector3_length,
-}
-
-Vector2_length :: proc(v: Vector2) -> f64 {
-	return math.sqrt(dot(v, v))
-}
-
-Vector3_length :: proc(v: Vector3) -> f64 {
-	return math.sqrt(dot(v, v))
-}
-
-norm :: proc {
-	Vector2_norm,
-	Vector3_norm,
-}
-
-Vector2_norm :: proc(v: Vector2) -> Vector2 {
-	return v / length(v)
-}
-
-Vector3_norm :: proc(v: Vector3) -> Vector3 {
-	return v / length(v)
-}
 
 // Colors
 
@@ -132,7 +94,7 @@ mix :: proc(a: Vector3, b: Vector3, t: f64) -> Vector3 {
 }
 
 reflect :: proc(i: Vector3, n: Vector3) -> Vector3 {
-	return i - n * 2.0 * dot(n, i)
+	return i - n * 2.0 * linalg.dot(n, i)
 }
 
 /* TODO:
@@ -145,16 +107,16 @@ randomOnSphere :: proc() -> Vector3 {
 		v.x = rand.float64() * 2.0 - 1.0
 		v.y = rand.float64() * 2.0 - 1.0
 		v.z = rand.float64() * 2.0 - 1.0
-		if length(v) <= 1.0 {break}
+		if linalg.length(v) <= 1.0 {break}
 	}
-	return Vector3_norm(v)
+	return linalg.normalize(v)
 }
 
 randomOnHemisphere :: proc(n: Vector3) -> Vector3 {
-	assert(math.abs(length(n)) - 1.0 < EPSILON)
+	assert(math.abs(linalg.length(n)) - 1.0 < EPSILON)
 
 	p := randomOnSphere()
-	return norm(p * dot(p, n))
+	return linalg.normalize(p * linalg.dot(p, n))
 }
 
 // Ray Marching
@@ -180,7 +142,7 @@ Hit :: struct {
 iResolution := Vector2{WIDTH, HEIGHT}
 
 sdSphere :: proc(p: Vector3, r: f64) -> f64 {
-	return length(p) - r
+	return linalg.length(p) - r
 }
 
 getNormal :: proc(p: Vector3) -> Vector3 {
@@ -188,7 +150,7 @@ getNormal :: proc(p: Vector3) -> Vector3 {
 	dy := Vector3{0, EPSILON, 0}
 	dz := Vector3{0, 0, EPSILON}
 
-	return norm(
+	return linalg.normalize(
 		Vector3 {
 			mymap(p + dx).dist - mymap(p - dx).dist,
 			mymap(p + dy).dist - mymap(p - dy).dist,
@@ -285,7 +247,7 @@ trace :: proc(ro: Vector3, rd: Vector3, depth: int) -> Vector3 {
 shader :: proc(fragCoord: Vector2) -> Vector4 {
 	uv := (fragCoord * 2.0 - iResolution) / iResolution.y
 	ro := Vector3{0.0, 0.0, -3.0}
-	rd := norm(Vector3{uv.x, uv.y, 1.0})
+	rd := linalg.normalize(Vector3{uv.x, uv.y, 1.0})
 
 	col := trace(ro, rd, MAX_REFLECTION)
 
