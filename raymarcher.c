@@ -485,20 +485,15 @@ typedef struct {
 
 int worker(void *arg) {
     const ThreadContext ctx = *(ThreadContext *)arg;
-    const int height = HEIGHT / THREAD_COUNT;
 
-    /* Each thread has it's own memory subbuffer
-       which doesn't overlap with others, so no race occurs. */
-    cvec3 *tfb = &fb[ctx.id * height * WIDTH];
-
-    for (int j = 0; j < height; j++) {
+    for (int j = ctx.id; j < HEIGHT; j += THREAD_COUNT) {
         for (int i = 0; i < WIDTH; i++) {
-            const vec2 fragCoord = { i, HEIGHT - (j + ctx.id * height)};
+            const vec2 fragCoord = { i, HEIGHT - j };
 
             const vec4 shaderOut = shader(fragCoord);
             const cvec3 color = vec4_to_cvec3(shaderOut);
 
-            fb_plot(tfb, i, j, color);
+            fb_plot(fb, i, j, color);
         }
     }
 
