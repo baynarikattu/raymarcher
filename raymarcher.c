@@ -75,15 +75,7 @@
 
 
 #define ASSERT(...) assert(__VA_ARGS__)
-
-#if __STDC_VERSION__ >= 201112L
-#  define STATIC_ASSERT(...) static_assert(__VA_ARGS__);
-#else
-#  define STATIC_ASSERT(...)
-#endif
-
 #define UNREACHABLE(...) assert(!"unreachable")
-
 #define ARRAY_LEN(arr) (sizeof((arr))/sizeof((arr)[0]))
 
 /* Vectors */
@@ -342,7 +334,7 @@ typedef struct {
 } Fetch;
 
 Fetch map(vec3 p) {
-    STATIC_ASSERT(MATERIAL_COUNT == 2, "update this")
+    ASSERT(MATERIAL_COUNT == 2 && "update this");
 
     vec3 spherePos = {-1.0, 0.0, 0.0};
     float sphere = sdSphere(vec3_sub(p, spherePos), 1.0);
@@ -441,7 +433,7 @@ vec3 trace(vec3 ro, vec3 rd, int depth) {
     const vec3 n = getNormal(p);
     const vec3 o = vec3_add(p, vec3_mulf(n, 0.01));
 
-    STATIC_ASSERT(MATERIAL_COUNT == 2, "update this")
+    ASSERT(MATERIAL_COUNT == 2 && "update this");
     vec3 d, col;
     switch (h.mat) {
         case MATERIAL_REFLECTIVE: {
@@ -475,9 +467,6 @@ vec4 shader(vec2 fragCoord) {
 }
 
 /* Multithreading */
-
-/* TODO: HEIGHT should not depend on divisibility by THREAD_COUNT */
-STATIC_ASSERT(HEIGHT % THREAD_COUNT == 0, "HEIGHT should be divisible by THREAD_COUNT")
 
 typedef struct {
     int id;
