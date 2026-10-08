@@ -62,7 +62,6 @@
 
 #define WIDTH 800
 #define HEIGHT 600
-#define ASPECT ((float)WIDTH / HEIGHT)
 
 #define MAX_ITER 800
 #define MAX_DIST 100

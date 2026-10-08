@@ -1,8 +1,5 @@
-*
-!*.*
-!*/
-.*
-
-*.ppm
-*.png
+.cache/
 compile_commands.json
+raymarcher_c
+raymarcher_odin
+output.ppm
