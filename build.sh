@@ -6,6 +6,8 @@ CC="${CC:-cc}"
 COPT="-O2 -ffast-math"
 CFLAGS="-g -std=c99 -Wall -Wextra -pedantic -pedantic-errors -Werror"
 
+ODIN="${ODIN:-odin}"
+
 try() {
   exec=$1
 
@@ -22,6 +24,6 @@ if try "$CC"; then
   (set -x; "$CC" $COPT $CFLAGS -o raymarcher_c raymarcher.c -lm)
 fi
 
-if try odin; then
-  (set -x; odin build . -out:raymarcher_odin -o:speed)
+if try "$ODIN"; then
+  (set -x; $ODIN build . -out:raymarcher_odin -o:speed)
 fi

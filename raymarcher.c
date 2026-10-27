@@ -53,11 +53,14 @@
 */
 
 #include <assert.h>
+#include <dlfcn.h>
+#include <errno.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 #include <threads.h>
 
 #define WIDTH 800
@@ -305,8 +308,6 @@ vec3 randomOnHemisphere(vec3 n) {
 
 /* Ray Marching */
 
-const vec2 iResolution = { WIDTH, HEIGHT };
-
 cvec3 vec4_to_cvec3(vec4 v) {
     return (cvec3) {
         .r = clamp(v.x * 255, 0, 255),
@@ -454,7 +455,9 @@ vec3 trace(vec3 ro, vec3 rd, int depth) {
     return mix(h.color, col, 0.5);
 }
 
-vec4 shader(vec2 fragCoord) {
+typedef vec4 (*Shader)(vec2 iResolution, vec2 fragCoord);
+
+vec4 standalone_shader(vec2 iResolution, vec2 fragCoord) {
     const vec2 uv = vec2_divf(vec2_sub(vec2_mulf(fragCoord, 2.0), iResolution), iResolution.y);
     const vec3 ro = {0.0, 0.0, -3.0};
     const vec3 rd = vec3_norm((vec3) {uv.x, uv.y, 1.0});
@@ -469,16 +472,20 @@ vec4 shader(vec2 fragCoord) {
 
 typedef struct {
     int id;
+    Shader shader;
 } ThreadContext;
 
 int worker(void *arg) {
+    const vec2 iResolution = { WIDTH, HEIGHT };
+
     const ThreadContext ctx = *(ThreadContext *)arg;
+    Shader shader = ctx.shader;
 
     for (int j = ctx.id; j < HEIGHT; j += THREAD_COUNT) {
         for (int i = 0; i < WIDTH; i++) {
             const vec2 fragCoord = { i, HEIGHT - j };
 
-            const vec4 shaderOut = shader(fragCoord);
+            const vec4 shaderOut = shader(iResolution, fragCoord);
             const cvec3 color = vec4_to_cvec3(shaderOut);
 
             fb_plot(fb, i, j, color);
@@ -488,7 +495,7 @@ int worker(void *arg) {
     return 0;
 }
 
-void run_workers(void) {
+void run_workers(Shader shader) {
     thrd_t threads[THREAD_COUNT];
     ThreadContext ctxs[THREAD_COUNT];
 
@@ -496,6 +503,7 @@ void run_workers(void) {
     for (int i = 0; i < THREAD_COUNT; i++) {
         ThreadContext *ctx = &ctxs[i];
         ctx->id = i;
+        ctx->shader = shader;
         thrd_create(&threads[i], worker, ctx);
     }
 
@@ -518,12 +526,52 @@ void write_ppm(const char *filename, int width, int height, cvec3 *data) {
     fclose(f);
 }
 
-int main(void) {
+void usage(const char *progname) {
+    fprintf(stderr, "Usage: %s [FILE]\nWhere [FILE] is a dynamic/shared library.\n", progname);
+}
+
+bool load_shader(const char *filename, Shader *out) {
+    FILE *handle = fopen(filename, "rb");
+    if (!handle) {
+        fprintf(stderr, "Failed to open %s: %s\n", filename, strerror(errno));
+        return false;
+    }
+
+    dlerror();
+    *(void **)out = dlsym(handle, "shader");
+    char *error = dlerror();
+    if (error) {
+        fprintf(stderr, "Failed to load symbol `shader` from `%s`: %s\n", filename, error);
+        return false;
+    }
+
+    return true;
+}
+
+int main(int argc, char **argv) {
+    const char *progname = argv[0];
+    (void)progname;
+    (void)argc;
+
     /* Fill fb with MAGENTA so multithreading buffer splitting errors become obvious. */
     fb_fill(fb, MAGENTA);
 
+    /* Get the shader */
+    Shader s;
+#ifdef RUNTIME_SHADER
+    if (argc != 2) {
+        usage(progname);
+        return 1;
+    }
+
+    const char *filename = argv[1];
+    if (!load_shader(filename, &s)) return 1;
+#else
+    s = standalone_shader;
+#endif // RUNTIME_SHADER
+
     /* Run rendering on multiple cores */
-    run_workers();
+    run_workers(s);
 
     /* Write the image to a file */
     write_ppm("output.ppm", WIDTH, HEIGHT, fb);
