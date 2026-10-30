@@ -227,7 +227,7 @@ vec3 vec3_norm(vec3 v) {
 /* Colors */
 
 typedef struct {
-    uint8_t r, g, b;
+    const uint8_t r, g, b;
 } cvec3;
 
 const cvec3 RED     = { 1, 0, 0 };
@@ -249,19 +249,24 @@ cvec3 cvec3_from_int(uint32_t color) {
 
 /* Framebuffer */
 
-static cvec3 fb[WIDTH * HEIGHT];
+static uint8_t fb[WIDTH * HEIGHT * sizeof(cvec3)];
 
-void fb_plot(cvec3 *fb, int x, int y, cvec3 color) {
+void fb_plot(uint8_t *fb, int x, int y, cvec3 color) {
     ASSERT(fb);
 
-    fb[x + y * WIDTH] = color;
+    size_t i = (x + y * WIDTH) * 3;
+    fb[i + 0] = color.r;
+    fb[i + 1] = color.g;
+    fb[i + 2] = color.b;
 }
 
-void fb_fill(cvec3 *fb, cvec3 color) {
+void fb_fill(uint8_t *fb, cvec3 color) {
     ASSERT(fb);
 
     for (int i = 0; i < WIDTH * HEIGHT; i++) {
-        fb[i] = color;
+        fb[i * 3 + 0] = color.r;
+        fb[i * 3 + 1] = color.g;
+        fb[i * 3 + 2] = color.b;
     }
 }
 
@@ -288,21 +293,21 @@ vec3 reflect(vec3 i, vec3 n) {
     - optimize `randomOnSphere()`
 */
 vec3 randomOnSphere(void) {
-    vec3 v;
     while (1) {
-        v.x = (float)rand() / (float)RAND_MAX * 2.0 - 1.0;
-        v.y = (float)rand() / (float)RAND_MAX * 2.0 - 1.0;
-        v.z = (float)rand() / (float)RAND_MAX * 2.0 - 1.0;
-        if (vec3_length(v) <= 1.0) break;
+        vec3 v = {
+            .x = (float)rand() / (float)RAND_MAX * 2.0 - 1.0,
+            .y = (float)rand() / (float)RAND_MAX * 2.0 - 1.0,
+            .z = (float)rand() / (float)RAND_MAX * 2.0 - 1.0,
+        };
+        if (vec3_length(v) <= 1.0) return vec3_norm(v);
     }
-    return vec3_norm(v);
 }
 
 vec3 randomOnHemisphere(vec3 n) {
     ASSERT(fabs(vec3_length(n)) - 1.0 < EPSILON);
 
     vec3 p = randomOnSphere();
-    if (vec3_dot(p, n) < 0.0) p = vec3_neg(p);
+    if (vec3_dot(p, n) < 0.0) return vec3_neg(p);
     return p;
 }
 
@@ -336,21 +341,22 @@ typedef struct {
 Fetch map(vec3 p) {
     ASSERT(MATERIAL_COUNT == 2 && "update this");
 
-    vec3 spherePos = {-1.0, 0.0, 0.0};
-    float sphere = sdSphere(vec3_sub(p, spherePos), 1.0);
+    const vec3 spherePos = {-1.0, 0.0, 0.0};
+    const float sphere = sdSphere(vec3_sub(p, spherePos), 1.0);
 
-    vec3 spherePos2 = {1.0, 0.0, 0.0};
-    float sphere2 = sdSphere(vec3_sub(p, spherePos2), 1.0);
+    const vec3 spherePos2 = {1.0, 0.0, 0.0};
+    const float sphere2 = sdSphere(vec3_sub(p, spherePos2), 1.0);
 
-    float plane = p.y + 1;
+    const float plane = p.y + 1;
 
-    float dists[3] = { sphere, sphere2, plane };
-    Material mats[3] = { MATERIAL_REFLECTIVE, MATERIAL_MATTE, MATERIAL_MATTE };
+    const float dists[3] = { sphere, sphere2, plane };
+    const Material mats[3] = { MATERIAL_REFLECTIVE, MATERIAL_MATTE, MATERIAL_MATTE };
     vec3 colors[3] = {
         {1.0, 0.0, 0.0},
         {0.0, 1.0, 1.0},
         {0.41, 0.41, 0.41},
     };
+
     /* Find the index of min. */
     size_t index = 0;
     for (size_t i = 0; i < ARRAY_LEN(dists); i++) {
@@ -462,7 +468,7 @@ vec4 standalone_shader(vec2 iResolution, vec2 fragCoord) {
     const vec3 ro = {0.0, 0.0, -3.0};
     const vec3 rd = vec3_norm((vec3) {uv.x, uv.y, 1.0});
 
-    vec3 avg = trace(ro, rd, MAX_REFLECTION);
+    const vec3 avg = trace(ro, rd, MAX_REFLECTION);
     const vec3 col = avg;
 
     return (vec4) {col.x, col.y, col.z, 1.0};
@@ -479,7 +485,7 @@ int worker(void *arg) {
     const vec2 iResolution = { WIDTH, HEIGHT };
 
     const ThreadContext ctx = *(ThreadContext *)arg;
-    Shader shader = ctx.shader;
+    const Shader shader = ctx.shader;
 
     for (int j = ctx.id; j < HEIGHT; j += THREAD_COUNT) {
         for (int i = 0; i < WIDTH; i++) {
@@ -515,7 +521,7 @@ void run_workers(Shader shader) {
 
 /* PPM (Portable Pixmap) */
 
-void write_ppm(const char *filename, int width, int height, cvec3 *data) {
+void write_ppm(const char *filename, int width, int height, uint8_t *data) {
     ASSERT(filename && data);
 
     FILE *f = fopen(filename, "wb");
@@ -539,7 +545,7 @@ bool load_shader(const char *filename, Shader *out) {
 
     dlerror();
     *(void **)out = dlsym(handle, "shader");
-    char *error = dlerror();
+    const char *error = dlerror();
     if (error) {
         fprintf(stderr, "Failed to load symbol `shader` from `%s`: %s\n", filename, error);
         return false;
